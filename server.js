@@ -8,8 +8,8 @@ const PORT = process.env.PORT || 3000;
 // ==========================================
 // CONFIGURAÇÕES E LINKS
 // ==========================================
-// Mude para o link "Raw" do seu arquivo data.json no GitHub
-const DATA_URL = 'https://raw.githubusercontent.com/cleitonleonel/redecanais/main/data.json';
+
+const DATA_URL = 'https://raw.githubusercontent.com/Esterquo/Addon-stremio/main/data.json';
 
 // Configurações para o Scraper em Python (caso vá utilizá-lo no Render)
 const PYTHON_CMD = 'python3';
