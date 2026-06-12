@@ -1,7 +1,6 @@
 const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
 const fs = require('fs');
-const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -30,7 +29,6 @@ const builder = new addonBuilder(manifest);
 async function atualizarCatalogoAutomatico() {
     console.log("Iniciando varredura automatizada...");
     
-    // Conteúdo do catálogo (Altere aqui os seus filmes ou canais de teste)
     const novosDados = {
         MOVIES: [
             {
@@ -63,28 +61,38 @@ async function atualizarCatalogoAutomatico() {
         const url = `https://api.github.com/repos/${repo}/contents/data.json`;
         let sha = "";
 
-        // 1. Tenta pegar o arquivo atual para obter o código SHA (necessário para atualizar)
+        // 1. Tenta pegar o arquivo atual para obter o código SHA
         try {
-            const res = await axios.get(url, { headers: { Authorization: `token ${token}` } });
-            sha = res.data.sha;
+            const res = await fetch(url, { headers: { Authorization: `token ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                sha = data.sha;
+            }
         } catch (e) {
             console.log("Arquivo data.json não encontrado, criando um novo...");
         }
 
         // 2. Envia a nova lista atualizada de volta para o seu GitHub
         const contentBase64 = Buffer.from(JSON.stringify(novosDados, null, 2)).toString('base64');
-        await axios.put(url, {
-            message: "Atualização automática de catálogo",
-            content: contentBase64,
-            sha: sha || undefined
-        }, {
-            headers: { Authorization: `token ${token}` }
+        const putRes = await fetch(url, {
+            method: 'PUT',
+            headers: { 
+                Authorization: `token ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: "Atualização automática de catálogo",
+                content: contentBase64,
+                sha: sha || undefined
+            })
         });
 
-        console.log("data.json atualizado com sucesso no GitHub!");
-        
-        // Atualiza a memória interna do servidor instantaneamente
-        catalogoLocal = novosDados; 
+        if (putRes.ok) {
+            console.log("data.json atualizado com sucesso no GitHub!");
+            catalogoLocal = novosDados; 
+        } else {
+            console.error("Erro na resposta do GitHub:", putRes.status);
+        }
 
     } catch (error) {
         console.error("Erro ao enviar dados para o GitHub:", error.message);
@@ -94,10 +102,10 @@ async function atualizarCatalogoAutomatico() {
 // Executa a automação assim que o servidor liga
 atualizarCatalogoAutomatico();
 
-// Agenda para rodar sozinho a cada 1 hora (3600000 milissegundos)
+// Agenda para rodar sozinho a cada 1 hora
 setInterval(atualizarCatalogoAutomatico, 3600000);
 
-// Catálogos do Stremio (Lendo direto da memória global)
+// Catálogos do Stremio
 builder.defineCatalogHandler((args) => {
     return new Promise((resolve) => {
         if (args.id === 'redecanais_movies') {
@@ -110,7 +118,7 @@ builder.defineCatalogHandler((args) => {
     });
 });
 
-// Streams do Stremio (Lendo direto da memória global)
+// Streams do Stremio
 builder.defineStreamHandler((args) => {
     return new Promise((resolve) => {
         const todos = [...(catalogoLocal.MOVIES || []), ...(catalogoLocal.CHANNELS || [])];
