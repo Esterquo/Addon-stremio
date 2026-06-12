@@ -17,7 +17,7 @@ const manifest = {
         { type: "movie", id: "redecanais_movies", name: "Filmes (GitHub)" },
         { type: "other", id: "redecanais_channels", name: "Canais Ao Vivo (GitHub)" }
     ],
-    resources: ["catalog", "stream"],
+    resources: ["catalog", "meta", "stream"],
     types: ["movie", "other"],
     idPrefixes: ["rc", "tt"]
 };
@@ -32,6 +32,7 @@ async function atualizarCatalogoAutomatico() {
         MOVIES: [
             {
                 id: "tt0103759",
+                type: "movie",
                 name: "Batman: A Série Animada (Auto)",
                 poster: "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
                 description: "Atualizado automaticamente pelo servidor.",
@@ -41,8 +42,10 @@ async function atualizarCatalogoAutomatico() {
         CHANNELS: [
             {
                 id: "rc_canal_auto",
+                type: "other",
                 name: "Canal Automático",
                 poster: "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+                description: "Transmissão ao vivo automática.",
                 streamUrl: "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
             }
         ]
@@ -53,6 +56,8 @@ async function atualizarCatalogoAutomatico() {
 
     if (!token || !repo) {
         console.log("Variáveis de ambiente do GitHub não configuradas no Render.");
+        // Se não houver chaves, usa os dados locais de teste para não quebrar o Stremio
+        catalogoLocal = novosDados;
         return;
     }
 
@@ -60,7 +65,6 @@ async function atualizarCatalogoAutomatico() {
         const url = `https://api.github.com/repos/${repo}/contents/data.json`;
         let sha = "";
 
-        // 1. Tenta pegar o arquivo atual para obter o código SHA
         try {
             const res = await fetch(url, { headers: { Authorization: `token ${token}` } });
             if (res.ok) {
@@ -71,7 +75,6 @@ async function atualizarCatalogoAutomatico() {
             console.log("Arquivo data.json não encontrado, criando um novo...");
         }
 
-        // 2. Envia a nova lista atualizada de volta para o seu GitHub
         const contentBase64 = Buffer.from(JSON.stringify(novosDados, null, 2)).toString('base64');
         const putRes = await fetch(url, {
             method: 'PUT',
@@ -87,25 +90,22 @@ async function atualizarCatalogoAutomatico() {
             })
         });
 
+        // Alimenta a memória do servidor com os dados obtidos obrigatoriamente
+        catalogoLocal = novosDados;
+
         if (putRes.ok) {
             console.log("data.json atualizado com sucesso no GitHub!");
-            catalogoLocal = novosDados; 
         } else {
             console.error("Erro na resposta do GitHub:", putRes.status);
         }
 
     } catch (error) {
         console.error("Erro ao enviar dados para o GitHub:", error.message);
+        catalogoLocal = novosDados; // Fallback para não zerar o Stremio
     }
 }
 
-// Executa a automação assim que o servidor liga
-atualizarCatalogoAutomatico();
-
-// Agenda para rodar sozinho a cada 1 hora
-setInterval(atualizarCatalogoAutomatico, 3600000);
-
-// Catálogos do Stremio
+// Configuração dos Handlers do Stremio
 builder.defineCatalogHandler((args) => {
     return new Promise((resolve) => {
         if (args.id === 'redecanais_movies') {
@@ -118,7 +118,26 @@ builder.defineCatalogHandler((args) => {
     });
 });
 
-// Streams do Stremio
+builder.defineMetaHandler((args) => {
+    return new Promise((resolve) => {
+        const todos = [...(catalogoLocal.MOVIES || []), ...(catalogoLocal.CHANNELS || [])];
+        const encontrado = todos.find(item => item.id === args.id);
+
+        if (encontrado) {
+            return resolve({
+                meta: {
+                    id: encontrado.id,
+                    type: args.type,
+                    name: encontrado.name,
+                    poster: encontrado.poster,
+                    description: encontrado.description
+                }
+            });
+        }
+        resolve({ meta: null });
+    });
+});
+
 builder.defineStreamHandler((args) => {
     return new Promise((resolve) => {
         const todos = [...(catalogoLocal.MOVIES || []), ...(catalogoLocal.CHANNELS || [])];
@@ -142,8 +161,20 @@ app.use((req, res, next) => {
 const addonInterface = builder.getInterface();
 app.get('/manifest.json', (req, res) => res.json(addonInterface.manifest));
 app.get('/catalog/:type/:id.json', (req, res) => addonInterface.get('catalog', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
+app.get('/meta/:type/:id.json', (req, res) => addonInterface.get('meta', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
 app.get('/stream/:type/:id.json', (req, res) => addonInterface.get('stream', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
 
-app.listen(PORT, () => {
-    console.log(`Servidor rodando e automatizado na porta ${PORT}`);
-});
+// FUNÇÃO DE INICIALIZAÇÃO CONTROLADA:
+// O servidor só abre a porta DEPOIS de preencher a variável local com os filmes!
+async function iniciarServidor() {
+    await atualizarCatalogoAutomatico(); // Espera carregar a lista de filmes
+    
+    app.listen(PORT, () => {
+        console.log(`Servidor rodando e pronto para o Stremio na porta ${PORT}`);
+    });
+
+    // Mantém o agendamento de 1 em 1 hora rodando em background
+    setInterval(atualizarCatalogoAutomatico, 3600000);
+}
+
+iniciarServidor();
