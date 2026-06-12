@@ -2,6 +2,7 @@
   "MOVIES": [
     {
       "id": "tt0103759",
+      "type": "movie",
       "name": "Batman: A Série Animada (Auto)",
       "poster": "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
       "description": "Atualizado automaticamente pelo servidor.",
@@ -11,8 +12,10 @@
   "CHANNELS": [
     {
       "id": "rc_canal_auto",
+      "type": "other",
       "name": "Canal Automático",
       "poster": "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+      "description": "Transmissão ao vivo automática.",
       "streamUrl": "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
     }
   ]
