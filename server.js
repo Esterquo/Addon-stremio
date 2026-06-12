@@ -6,6 +6,9 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Variável global para manter o catálogo na memória do servidor
+let catalogoLocal = { MOVIES: [], CHANNELS: [] };
+
 // Configuração básica do Manifesto
 const manifest = {
     id: "com.redecanais.stremio",
@@ -27,10 +30,7 @@ const builder = new addonBuilder(manifest);
 async function atualizarCatalogoAutomatico() {
     console.log("Iniciando varredura automatizada...");
     
-    // ---------------------------------------------------------
-    // AQUI ENTRA A LÓGICA DO SEU SCRAPER PYTHON OU DO SITE
-    // Para este exemplo, geramos os itens automaticamente com IDs corretos:
-    // ---------------------------------------------------------
+    // Conteúdo do catálogo (Altere aqui os seus filmes ou canais de teste)
     const novosDados = {
         MOVIES: [
             {
@@ -82,6 +82,10 @@ async function atualizarCatalogoAutomatico() {
         });
 
         console.log("data.json atualizado com sucesso no GitHub!");
+        
+        // Atualiza a memória interna do servidor instantaneamente
+        catalogoLocal = novosDados; 
+
     } catch (error) {
         console.error("Erro ao enviar dados para o GitHub:", error.message);
     }
@@ -93,34 +97,29 @@ atualizarCatalogoAutomatico();
 // Agenda para rodar sozinho a cada 1 hora (3600000 milissegundos)
 setInterval(atualizarCatalogoAutomatico, 3600000);
 
-// Catálogos e Streams do Stremio
+// Catálogos do Stremio (Lendo direto da memória global)
 builder.defineCatalogHandler((args) => {
     return new Promise((resolve) => {
-        if (fs.existsSync('data.json')) {
-            const data = JSON.parse(fs.readFileSync('data.json', 'utf8'));
-            if (args.id === 'redecanais_movies') {
-                return resolve({ metas: data.MOVIES || [] });
-            }
-            if (args.id === 'redecanais_channels') {
-                return resolve({ metas: data.CHANNELS || [] });
-            }
+        if (args.id === 'redecanais_movies') {
+            return resolve({ metas: catalogoLocal.MOVIES || [] });
+        }
+        if (args.id === 'redecanais_channels') {
+            return resolve({ metas: catalogoLocal.CHANNELS || [] });
         }
         resolve({ metas: [] });
     });
 });
 
+// Streams do Stremio (Lendo direto da memória global)
 builder.defineStreamHandler((args) => {
     return new Promise((resolve) => {
-        if (fs.existsSync('data.json')) {
-            const data = JSON.parse(fs.readFileSync('data.json', 'utf8'));
-            const todos = [...(data.MOVIES || []), ...(data.CHANNELS || [])];
-            const encontrado = todos.find(item => item.id === args.id);
+        const todos = [...(catalogoLocal.MOVIES || []), ...(catalogoLocal.CHANNELS || [])];
+        const encontrado = todos.find(item => item.id === args.id);
 
-            if (encontrado) {
-                return resolve({
-                    streams: [{ title: "RedeCanais Direct (Auto)", url: encontrado.streamUrl }]
-                });
-            }
+        if (encontrado) {
+            return resolve({
+                streams: [{ title: "RedeCanais Direct (Auto)", url: encontrado.streamUrl }]
+            });
         }
         resolve({ streams: [] });
     });
