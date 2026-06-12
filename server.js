@@ -19,7 +19,7 @@ const manifest = {
     ],
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "other"],
-    idPrefixes: ["rc", "tt"]
+    idPrefixes: ["rc"] // Deixamos apenas o rc para não dar conflito com o IMDB
 };
 
 const builder = new addonBuilder(manifest);
@@ -31,7 +31,7 @@ async function atualizarCatalogoAutomatico() {
     const novosDados = {
         MOVIES: [
             {
-                id: "tt0103759",
+                id: "rc0103759", // Prefixo correto para aparecer no catálogo
                 type: "movie",
                 name: "Batman: A Série Animada (Auto)",
                 poster: "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
@@ -56,7 +56,6 @@ async function atualizarCatalogoAutomatico() {
 
     if (!token || !repo) {
         console.log("Variáveis de ambiente do GitHub não configuradas no Render.");
-        // Se não houver chaves, usa os dados locais de teste para não quebrar o Stremio
         catalogoLocal = novosDados;
         return;
     }
@@ -90,7 +89,6 @@ async function atualizarCatalogoAutomatico() {
             })
         });
 
-        // Alimenta a memória do servidor com os dados obtidos obrigatoriamente
         catalogoLocal = novosDados;
 
         if (putRes.ok) {
@@ -101,7 +99,7 @@ async function atualizarCatalogoAutomatico() {
 
     } catch (error) {
         console.error("Erro ao enviar dados para o GitHub:", error.message);
-        catalogoLocal = novosDados; // Fallback para não zerar o Stremio
+        catalogoLocal = novosDados;
     }
 }
 
@@ -164,16 +162,14 @@ app.get('/catalog/:type/:id.json', (req, res) => addonInterface.get('catalog', {
 app.get('/meta/:type/:id.json', (req, res) => addonInterface.get('meta', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
 app.get('/stream/:type/:id.json', (req, res) => addonInterface.get('stream', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
 
-// FUNÇÃO DE INICIALIZAÇÃO CONTROLADA:
-// O servidor só abre a porta DEPOIS de preencher a variável local com os filmes!
+// Inicialização controlada
 async function iniciarServidor() {
-    await atualizarCatalogoAutomatico(); // Espera carregar a lista de filmes
+    await atualizarCatalogoAutomatico();
     
     app.listen(PORT, () => {
         console.log(`Servidor rodando e pronto para o Stremio na porta ${PORT}`);
     });
 
-    // Mantém o agendamento de 1 em 1 hora rodando em background
     setInterval(atualizarCatalogoAutomatico, 3600000);
 }
 
