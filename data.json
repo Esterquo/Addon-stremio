@@ -1,0 +1,19 @@
+{
+  "CHANNELS": [
+    {
+      "id": "canal_exemplo_1",
+      "name": "Canal Exemplo 1 (Big Buck Bunny - CC)",
+      "poster": "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+      "streamUrl": "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
+    }
+  ],
+  "MOVIES": [
+    {
+      "id": "filme_exemplo_1",
+      "name": "Big Buck Bunny",
+      "poster": "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+      "description": "Filme curto de animacao com licenca Creative Commons.",
+      "streamUrl": "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
+    }
+  ]
+}
