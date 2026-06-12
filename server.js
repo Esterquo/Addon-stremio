@@ -1,6 +1,5 @@
 const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -78,7 +77,8 @@ async function atualizarCatalogoAutomatico() {
             method: 'PUT',
             headers: { 
                 Authorization: `token ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'Stremio-Addon-Automation'
             },
             body: JSON.stringify({
                 message: "Atualização automática de catálogo",
