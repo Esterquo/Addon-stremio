@@ -1,18 +1,18 @@
 {
-  "CHANNELS": [
+  "MOVIES": [
     {
-      "id": "canal_exemplo_1",
-      "name": "Canal Exemplo 1 (Big Buck Bunny - CC)",
+      "id": "tt0103759",
+      "name": "Batman: A Série Animada (Auto)",
       "poster": "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+      "description": "Atualizado automaticamente pelo servidor.",
       "streamUrl": "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
     }
   ],
-  "MOVIES": [
+  "CHANNELS": [
     {
-      "id": "filme_exemplo_1",
-      "name": "Big Buck Bunny",
+      "id": "rc_canal_auto",
+      "name": "Canal Automático",
       "poster": "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
-      "description": "Filme curto de animacao com licenca Creative Commons.",
       "streamUrl": "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
     }
   ]
