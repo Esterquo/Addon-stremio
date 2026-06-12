@@ -1,180 +1,142 @@
 const express = require('express');
+const { addonBuilder } = require('stremio-addon-sdk');
+const fs = require('fs');
 const axios = require('axios');
-const { exec } = require('child_process');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// ==========================================
-// CONFIGURAÇÕES E LINKS
-// ==========================================
+// Configuração básica do Manifesto
+const manifest = {
+    id: "com.redecanais.stremio",
+    version: "1.0.0",
+    name: "RedeCanais Completo",
+    description: "Addon automatizado integrado ao GitHub.",
+    catalogs: [
+        { type: "movie", id: "redecanais_movies", name: "Filmes (GitHub)" },
+        { type: "other", id: "redecanais_channels", name: "Canais Ao Vivo (GitHub)" }
+    ],
+    resources: ["catalog", "stream"],
+    types: ["movie", "other"],
+    idPrefixes: ["rc", "tt"]
+};
 
-const DATA_URL = 'https://raw.githubusercontent.com/Esterquo/Addon-stremio/main/data.json';
+const builder = new addonBuilder(manifest);
 
-// Configurações para o Scraper em Python (caso vá utilizá-lo no Render)
-const PYTHON_CMD = 'python3';
-
-// ==========================================
-// 1. MANIFESTO DO STREMIO
-// ==========================================
-app.get('/manifest.json', (req, res) => {
-    res.json({
-        id: 'com.redecanais.stremio',
-        version: '1.0.0',
-        name: 'RedeCanais Completo',
-        description: 'Addon que integra sua lista do GitHub e o backend do RedeCanais ao Stremio.',
-        catalogs: [
+// Função para buscar e salvar dados automaticamente via API do GitHub
+async function atualizarCatalogoAutomatico() {
+    console.log("Iniciando varredura automatizada...");
+    
+    // ---------------------------------------------------------
+    // AQUI ENTRA A LÓGICA DO SEU SCRAPER PYTHON OU DO SITE
+    // Para este exemplo, geramos os itens automaticamente com IDs corretos:
+    // ---------------------------------------------------------
+    const novosDados = {
+        MOVIES: [
             {
-                type: 'movie',
-                id: 'redecanais_movies',
-                name: 'Filmes (GitHub)',
-                extra: [{ name: 'search', isRequired: false }] // Permite busca se necessário
-            },
-            {
-                type: 'other',
-                id: 'redecanais_channels',
-                name: 'Canais Ao Vivo (GitHub)',
-                extra: []
+                id: "tt0103759",
+                name: "Batman: A Série Animada (Auto)",
+                poster: "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+                description: "Atualizado automaticamente pelo servidor.",
+                streamUrl: "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
             }
         ],
-        resources: ['catalog', 'stream'],
-        types: ['movie', 'other'],
-        idPrefixes: ['rc', 'tt']
-    });
-});
+        CHANNELS: [
+            {
+                id: "rc_canal_auto",
+                name: "Canal Automático",
+                poster: "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+                streamUrl: "http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"
+            }
+        ]
+    };
 
-// ==========================================
-// FUNÇÃO AUXILIAR: BUSCAR DADOS DO GITHUB
-// ==========================================
-async function getRemoteData() {
+    const token = process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_REPO;
+
+    if (!token || !repo) {
+        console.log("Variáveis de ambiente do GitHub não configuradas no Render.");
+        return;
+    }
+
     try {
-        const response = await axios.get(DATA_URL);
-        return response.data;
+        const url = `https://api.github.com/repos/${repo}/contents/data.json`;
+        let sha = "";
+
+        // 1. Tenta pegar o arquivo atual para obter o código SHA (necessário para atualizar)
+        try {
+            const res = await axios.get(url, { headers: { Authorization: `token ${token}` } });
+            sha = res.data.sha;
+        } catch (e) {
+            console.log("Arquivo data.json não encontrado, criando um novo...");
+        }
+
+        // 2. Envia a nova lista atualizada de volta para o seu GitHub
+        const contentBase64 = Buffer.from(JSON.stringify(novosDados, null, 2)).toString('base64');
+        await axios.put(url, {
+            message: "Atualização automática de catálogo",
+            content: contentBase64,
+            sha: sha || undefined
+        }, {
+            headers: { Authorization: `token ${token}` }
+        });
+
+        console.log("data.json atualizado com sucesso no GitHub!");
     } catch (error) {
-        console.error('Erro ao buscar dados do GitHub:', error.message);
-        // Retorna uma estrutura vazia padrão para não quebrar o addon se o GitHub falhar
-        return { CHANNELS: [], MOVIES: [] };
+        console.error("Erro ao enviar dados para o GitHub:", error.message);
     }
 }
 
-// ==========================================
-// 2. LÓGICA DOS CATÁLOGOS (EXIBIÇÃO)
-// ==========================================
-app.get('/catalog/:type/:id/:extra?.json', async (req, res) => {
-    const catalogId = req.params.id;
-    let extra = {};
-    
-    if (req.params.extra) {
-        try {
-            // O Stremio envia os parâmetros extras (como busca) em formato de string/JSON
-            const cleanExtra = req.params.extra.replace('.json', '');
-            extra = JSON.parse(decodeURIComponent(cleanExtra));
-        } catch(e) {
-            extra = {};
-        }
-    }
+// Executa a automação assim que o servidor liga
+atualizarCatalogoAutomatico();
 
-    // SE O USUÁRIO FIZER UMA BUSCA POR TEXTO (Usa o Scraper do Python)
-    if (extra.search) {
-        const query = extra.search;
-        const command = `${PYTHON_CMD} -m redecanais --all "${query}"`;
+// Agenda para rodar sozinho a cada 1 hora (3600000 milissegundos)
+setInterval(atualizarCatalogoAutomatico, 3600000);
 
-        return exec(command, { timeout: 10000 }, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Erro no Scraper Python: ${error}`);
-                return res.json({ metas: [] });
+// Catálogos e Streams do Stremio
+builder.defineCatalogHandler((args) => {
+    return new Promise((resolve) => {
+        if (fs.existsSync('data.json')) {
+            const data = JSON.parse(fs.readFileSync('data.json', 'utf8'));
+            if (args.id === 'redecanais_movies') {
+                return resolve({ metas: data.MOVIES || [] });
             }
-
-            const metas = [];
-            const lines = stdout.split('\n');
-            lines.forEach((line, index) => {
-                if (line.trim().length > 5) {
-                    metas.push({
-                        id: `tt_py_${Date.now()}_${index}`, 
-                        type: 'movie',
-                        name: line.substring(0, 50),
-                        poster: 'https://via.placeholder.com/300x450?text=RedeCanais+Python',
-                        description: 'Resultado encontrado via Scraper Python.'
-                    });
-                }
-            });
-            return res.json({ metas: metas.slice(0, 20) });
-        });
-    }
-
-    // CASO CONTRÁRIO: EXIBE A SUA LISTA FIXA DO DATA.JSON DO GITHUB
-    const data = await getRemoteData();
-    let metas = [];
-
-    if (catalogId === 'redecanais_movies') {
-        metas = (data.MOVIES || []).map(m => ({
-            id: `rc:${m.id}`,
-            type: 'movie',
-            name: m.name,
-            poster: m.poster,
-            description: m.description || 'Conteúdo de Domínio Público'
-        }));
-    } else if (catalogId === 'redecanais_channels') {
-        metas = (data.CHANNELS || []).map(c => ({
-            id: `rc:${c.id}`,
-            type: 'other',
-            name: c.name,
-            poster: c.poster,
-            description: 'Transmissão de Canal Ao Vivo'
-        }));
-    }
-
-    res.json({ metas });
-});
-
-// ==========================================
-// 3. LÓGICA DOS STREAMS (REPRODUÇÃO)
-// ==========================================
-app.get('/stream/:type/:id.json', async (req, res) => {
-    const fullId = req.params.id.replace('.json', '');
-    const streams = [];
-
-    // Se o ID veio da sua lista do GitHub (começa com rc:)
-    if (fullId.startsWith('rc:')) {
-        const cleanId = fullId.replace('rc:', '');
-        const data = await getRemoteData();
-        
-        // Procura o item tanto na lista de Filmes quanto de Canais
-        const item = [...(data.MOVIES || []), ...(data.CHANNELS || [])].find(i => i.id === cleanId);
-
-        if (item && item.streamUrl) {
-            streams.push({
-                name: 'RedeCanais Direct',
-                title: item.name,
-                url: item.streamUrl,
-                behaviorHints: {
-                    notWebReady: false,
-                    bingeGroup: `rc:${cleanId}`
-                }
-            });
+            if (args.id === 'redecanais_channels') {
+                return resolve({ metas: data.CHANNELS || [] });
+            }
         }
-    } 
-    // Se o ID veio do Scraper do Python (começa com tt_py_)
-    else if (fullId.startsWith('tt_py_')) {
-        // Aqui você colocaria a lógica de extração em tempo real se necessário, ex:
-        // python -m redecanais --url "nome_do_filme"
-        streams.push({
-            name: 'RedeCanais Python',
-            title: 'Assistir via Scraper',
-            url: 'http://exemplo.com/stream_do_python_aqui.m3u8' 
-        });
-    }
-
-    res.json({ streams });
+        resolve({ metas: [] });
+    });
 });
 
-// ==========================================
-// INICIALIZAÇÃO DO SERVIDOR
-// ==========================================
+builder.defineStreamHandler((args) => {
+    return new Promise((resolve) => {
+        if (fs.existsSync('data.json')) {
+            const data = JSON.parse(fs.readFileSync('data.json', 'utf8'));
+            const todos = [...(data.MOVIES || []), ...(data.CHANNELS || [])];
+            const encontrado = todos.find(item => item.id === args.id);
+
+            if (encontrado) {
+                return resolve({
+                    streams: [{ title: "RedeCanais Direct (Auto)", url: encontrado.streamUrl }]
+                });
+            }
+        }
+        resolve({ streams: [] });
+    });
+});
+
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "*");
+    next();
+});
+
+const addonInterface = builder.getInterface();
+app.get('/manifest.json', (req, res) => res.json(addonInterface.manifest));
+app.get('/catalog/:type/:id.json', (req, res) => addonInterface.get('catalog', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
+app.get('/stream/:type/:id.json', (req, res) => addonInterface.get('stream', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
+
 app.listen(PORT, () => {
-    console.log(`==================================================`);
-    console.log(`Addon do Stremio rodando com sucesso na porta ${PORT}`);
-    console.log(`Endereço do Manifesto para colar no Stremio:`);
-    console.log(`http://localhost:${PORT}/manifest.json`);
-    console.log(`==================================================`);
+    console.log(`Servidor rodando e automatizado na porta ${PORT}`);
 });
