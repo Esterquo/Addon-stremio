@@ -1,16 +1,15 @@
 const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
-const { exec } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Variável global para manter o catálogo na memória do servidor
+// URL bruta do seu data.json no GitHub (Substitua com o seu usuário e repositório real)
+// Exemplo: 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/data.json'
+const GITHUB_DATA_URL = `https://raw.githubusercontent.com/${process.env.GITHUB_REPO || 'Esterquo/Addon-stremio'}/main/data.json`;
+
 let catalogoLocal = { MOVIES: [], CHANNELS: [], SERIES: [] };
 
-// Configuração básica do Manifesto
 const manifest = {
     id: "com.redecanais.stremio",
     version: "2.0.0",
@@ -28,44 +27,21 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// Função para executar o scraper Python e atualizar o catálogo
-async function atualizarCatalogoAutomatico() {
-    console.log("Executando scraper do RedeCanais...");
-
-    return new Promise((resolve, reject) => {
-        exec('python3 scraper.py', { cwd: __dirname }, (error, stdout, stderr) => {
-            if (error) {
-                console.error("Erro ao executar scraper:", error);
-                console.error("stderr:", stderr);
-                // Tenta carregar data.json existente como fallback
-                try {
-                    const dataPath = path.join(__dirname, 'data.json');
-                    if (fs.existsSync(dataPath)) {
-                        const dados = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-                        catalogoLocal = dados;
-                        console.log("Carregado catálogo existente do data.json");
-                    }
-                } catch (e) {
-                    console.error("Erro ao carregar data.json:", e);
-                }
-                resolve();
-                return;
-            }
-
-            try {
-                // Lê o data.json atualizado pelo scraper
-                const dataPath = path.join(__dirname, 'data.json');
-                const dados = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-                catalogoLocal = dados;
-
-                console.log(`Catálogo atualizado: ${catalogoLocal.MOVIES?.length || 0} filmes, ${catalogoLocal.SERIES?.length || 0} séries, ${catalogoLocal.CHANNELS?.length || 0} canais`);
-                resolve();
-            } catch (e) {
-                console.error("Erro ao processar dados do scraper:", e);
-                reject(e);
-            }
-        });
-    });
+// Função rápida apenas para ler os dados que já foram salvos pelo scraper no GitHub
+async function obterDadosDoGitHub() {
+    console.log("Buscando catálogo atualizado do GitHub...");
+    try {
+        const response = await fetch(GITHUB_DATA_URL);
+        if (response.ok) {
+            const dados = await response.json();
+            catalogoLocal = dados;
+            console.log(`Catálogo carregado: ${catalogoLocal.MOVIES?.length || 0} filmes, ${catalogoLocal.SERIES?.length || 0} séries, ${catalogoLocal.CHANNELS?.length || 0} canais`);
+        } else {
+            console.error("Não foi possível carregar o data.json do GitHub. Status:", response.status);
+        }
+    } catch (e) {
+        console.error("Erro ao buscar dados do GitHub:", e.message);
+    }
 }
 
 // Configuração dos Handlers do Stremio
@@ -127,21 +103,32 @@ app.use((req, res, next) => {
     next();
 });
 
+// Middleware para garantir que o catálogo não esteja zerado em ambientes Serverless (Vercel)
+app.use(async (req, res, next) => {
+    if (!catalogoLocal.MOVIES || catalogoLocal.MOVIES.length === 0) {
+        await obterDadosDoGitHub();
+    }
+    next();
+});
+
 const addonInterface = builder.getInterface();
 app.get('/manifest.json', (req, res) => res.json(addonInterface.manifest));
 app.get('/catalog/:type/:id.json', (req, res) => addonInterface.get('catalog', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
 app.get('/meta/:type/:id.json', (req, res) => addonInterface.get('meta', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
 app.get('/stream/:type/:id.json', (req, res) => addonInterface.get('stream', { type: req.params.type, id: req.params.id }).then(r => res.json(r)));
 
-// Inicialização controlada
+// Inicialização
 async function iniciarServidor() {
-    await atualizarCatalogoAutomatico();
-
-    app.listen(PORT, () => {
-        console.log(`Servidor rodando e pronto para o Stremio na porta ${PORT}`);
-    });
-
-    setInterval(atualizarCatalogoAutomatico, 3600000);
+    await obterDadosDoGitHub();
+    
+    // Se não for Vercel, o Express abre a porta localmente (como no Render ou local)
+    if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+        app.listen(PORT, () => {
+            console.log(`Servidor rodando na porta ${PORT}`);
+        });
+    }
 }
 
 iniciarServidor();
+
+module.exports = app; // Necessário para a Vercel
