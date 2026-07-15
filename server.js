@@ -136,7 +136,7 @@ app.get('/stream/:type/:id.json', (req, res) => addonInterface.get('stream', { t
 // Inicialização controlada
 async function iniciarServidor() {
     await atualizarCatalogoAutomatico();
-    
+
     app.listen(PORT, () => {
         console.log(`Servidor rodando e pronto para o Stremio na porta ${PORT}`);
     });
