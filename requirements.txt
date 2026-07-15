@@ -1,0 +1,3 @@
+redecanais
+requests
+beautifulsoup4

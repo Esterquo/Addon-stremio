@@ -1,0 +1,18 @@
+{
+  "name": "addon-redecanais-stremio",
+  "version": "2.0.0",
+  "description": "Addon RedeCanais + Nuvio para Stremio",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "scraper": "python3 scraper.py"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "stremio-addon-sdk": "^1.3.0",
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,20 @@
+# Render.com Deploy Configuration
+
+build:
+  - npm install
+  - pip install -r requirements.txt
+
+start:
+  - npm start
+
+env:
+  - key: NODE_VERSION
+    value: "18"
+  - key: PYTHON_VERSION
+    value: "3.11"
+  - key: PORT
+    value: "10000"
+  - key: NUVIO_API_KEY
+    sync: false
+  - key: NUVIO_API_URL
+    value: "https://api.nuvio.com"
