@@ -1,5 +1,9 @@
 const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+
+const execPromise = promisify(exec);
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -26,6 +30,20 @@ const manifest = {
 };
 
 const builder = new addonBuilder(manifest);
+
+// Função para rodar o scraper
+async function rodarScraper() {
+    console.log("Executando scraper...");
+    try {
+        const { stdout, stderr } = await execPromise('python3 scraper.py');
+        console.log("Scraper executado:", stdout);
+        if (stderr) console.error("Scraper stderr:", stderr);
+        return true;
+    } catch (error) {
+        console.error("Erro ao executar scraper:", error.message);
+        return false;
+    }
+}
 
 // Função rápida apenas para ler os dados que já foram salvos pelo scraper no GitHub
 async function obterDadosDoGitHub() {
@@ -119,8 +137,14 @@ app.get('/stream/:type/:id.json', (req, res) => addonInterface.get('stream', { t
 
 // Inicialização
 async function iniciarServidor() {
+    // Rodar scraper na inicialização (se estiver no Railway)
+    if (process.env.RAILWAY_ENVIRONMENT) {
+        console.log("Rodando no Railway - executando scraper...");
+        await rodarScraper();
+    }
+
     await obterDadosDoGitHub();
-    
+
     // Se não for Vercel, o Express abre a porta localmente (como no Render ou local)
     if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
         app.listen(PORT, () => {
