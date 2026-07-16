@@ -12,8 +12,12 @@ RUN npm install
 
 # Copia requirements.txt e instala dependências Python
 COPY requirements.txt ./
-RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
-    python3 -c "import redecanais; print('redecanais instalado com sucesso')" || echo "ERRO: redecanais não foi instalado"
+RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt 2>&1 | tee /tmp/pip-install.log && \
+    echo "=== Verificando instalação ===" && \
+    pip3 list | grep redecanais && \
+    python3 -c "import sys; print('Python path:', sys.path)" && \
+    python3 -c "import redecanais; print('redecanais instalado com sucesso')" || \
+    (echo "ERRO: redecanais não foi instalado" && cat /tmp/pip-install.log)
 
 # Copia o resto do código
 COPY . .
