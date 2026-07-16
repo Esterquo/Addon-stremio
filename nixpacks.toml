@@ -1,11 +1,12 @@
 [phases.setup]
-nixPkgs = ["nodejs_18", "python311", "python311Packages.pip"]
+nixPkgs = ["nodejs_18", "python311", "python311Packages.pip", "git"]
 
 [phases.install]
 cmds = [
     "npm install",
-    "chmod +x setup.sh",
-    "./setup.sh"
+    "python3 -m pip install --upgrade pip",
+    "python3 -m pip install requests beautifulsoup4",
+    "python3 -m pip install git+https://github.com/cleitonleonel/redecanais.git"
 ]
 
 [start]
