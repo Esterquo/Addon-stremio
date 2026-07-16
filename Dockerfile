@@ -1,7 +1,7 @@
 FROM node:18
 
 # Instala o Python e dependências do sistema
-RUN apt-get update && apt-get install -y python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv git && rm -rf /var/lib/apt/lists/*
 
 # Configura o diretório de trabalho
 WORKDIR /app
@@ -10,8 +10,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Instala o scraper em Python globalmente
-RUN pip3 install --break-system-packages git+https://github.com/cleitonleonel/redecanais.git
+# Copia requirements.txt e instala dependências Python
+COPY requirements.txt ./
+RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
+    python3 -c "import redecanais; print('redecanais instalado com sucesso')" || echo "ERRO: redecanais não foi instalado"
 
 # Copia o resto do código
 COPY . .
